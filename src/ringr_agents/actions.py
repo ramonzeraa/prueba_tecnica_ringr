@@ -32,21 +32,26 @@ class AgentAction(ABC):
     endpoint: str
 
     @abstractmethod
-    def is_triggered(self, parsed_data: dict[str, Any]) -> bool:
-        """Whether the extracted data satisfies this action's conditions."""
-        raise NotImplementedError
+    def validate_and_normalize(self, parsed_data: dict[str, Any]) -> dict[str, Any] | None:
+        """Validate the extracted data and, if it satisfies this action's
+        conditions, return the normalized payload to send. Return None
+        otherwise.
 
-    @abstractmethod
-    def build_payload(self, parsed_data: dict[str, Any]) -> dict[str, Any]:
-        """Build the integration payload. Only called when `is_triggered` is True."""
+        This mirrors the spec's own wording ("validar y normalizar la
+        informacion parseada y decidir si se debe ejecutar una accion") as
+        a single step on purpose: an earlier version of this class split
+        "decide" (`is_triggered`) and "build" (`build_payload`) into two
+        separate methods that independently re-read the same fields from
+        `parsed_data`, which meant nothing prevented a future subclass from
+        building a payload without the matching validation. Doing both at
+        once removes that failure mode structurally instead of relying on
+        every implementation remembering to keep them in sync.
+        """
         raise NotImplementedError
 
     def resolve(self, parsed_data: dict[str, Any]) -> OutboundAction | None:
         """Return the outbound call to send, or None if conditions aren't met."""
-        if not self.is_triggered(parsed_data):
+        payload = self.validate_and_normalize(parsed_data)
+        if payload is None:
             return None
-        return OutboundAction(
-            key=self.key,
-            endpoint=self.endpoint,
-            payload=self.build_payload(parsed_data),
-        )
+        return OutboundAction(key=self.key, endpoint=self.endpoint, payload=payload)

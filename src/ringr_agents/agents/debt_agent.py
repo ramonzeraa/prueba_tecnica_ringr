@@ -25,15 +25,16 @@ class RegisterDebtCommitmentAction(AgentAction):
     key = "debt.register_commitment"
     endpoint = "https://api.ringr.debt/v1/commitment"
 
-    def is_triggered(self, parsed_data: dict[str, Any]) -> bool:
-        return self._is_valid_date(parsed_data.get("commitment_date")) and self._is_valid_amount(
-            parsed_data.get("committed_amount")
-        )
+    def validate_and_normalize(self, parsed_data: dict[str, Any]) -> dict[str, Any] | None:
+        commitment_date = parsed_data.get("commitment_date")
+        committed_amount = parsed_data.get("committed_amount")
 
-    def build_payload(self, parsed_data: dict[str, Any]) -> dict[str, Any]:
+        if not self._is_valid_date(commitment_date) or not self._is_valid_amount(committed_amount):
+            return None
+
         return {
-            "commitment_date": parsed_data["commitment_date"],
-            "committed_amount": float(parsed_data["committed_amount"]),
+            "commitment_date": commitment_date,
+            "committed_amount": float(committed_amount),
         }
 
     @staticmethod

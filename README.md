@@ -86,10 +86,9 @@ desarrollo/test.
 2. `ParserModel.parse_data()` → `dict` con la información estructurada
    extraída de la conversación (claves específicas de cada caso de uso).
 3. Para cada `AgentAction` del agente que **no se haya ejecutado ya** en
-   esta conversación:
-   - `is_triggered(parsed_data)` decide si las condiciones de negocio se
-     cumplen.
-   - Si sí, `build_payload(parsed_data)` construye el cuerpo de la llamada.
+   esta conversación: `validate_and_normalize(parsed_data)` valida las
+   condiciones de negocio y, si se cumplen, devuelve el payload ya
+   normalizado en un único paso (devuelve `None` si no se cumplen).
 4. `IntegrationClient.post(endpoint, payload)` ejecuta la integración
    (simulada). Si la respuesta es exitosa, la acción se marca como
    ejecutada para el resto de la conversación.
@@ -103,7 +102,8 @@ desarrollo/test.
 | `IntegrationClient` como interfaz + `SimulatedIntegrationClient` | Permite construir el request (headers/body) igual que un cliente real, sin tocar la red, y sin que el agente sepa la diferencia. Sustituir por un cliente real (`requests`) es un cambio de una sola clase. |
 | Idempotencia con `set[str]` de claves de acción, por instancia de agente | Una instancia de agente representa una conversación. Solo se marca una acción como ejecutada tras una respuesta exitosa (`response.ok`), así una falla transitoria puede reintentarse en el siguiente turno sin perder la acción de negocio. |
 | Validación y normalización de tipos y formato antes de disparar (fecha ISO, `float` excluyendo `bool`, strings no vacíos tras `strip()`) | El enunciado pide explícitamente "validar y normalizar la información parseada". `ParserModel` es una caja negra para el agente: no se asume que los datos siempre llegan bien formados. |
-| Headers adicionales = mismo `payload` que se envía en el body | El enunciado pide reflejar "los datos devueltos por el ParserModel" como headers, con los mismos nombres. Como `build_payload` siempre preserva los nombres de campo de `parse_data()` sin transformarlos, `payload` ya **es** esos datos — reutilizarlo evita una segunda copia del mismo estado. |
+| `AgentAction` expone un único método `validate_and_normalize(parsed_data) -> dict \| None`, en vez de dos métodos separados (`is_triggered` + `build_payload`) | Con dos métodos, ambos leían los mismos campos de `parsed_data` de forma independiente, y nada impedía que un futuro `build_payload` se llamara sin pasar antes por `is_triggered`. Un único método que valida y devuelve el payload ya normalizado elimina ese acoplamiento implícito de raíz, no solo con disciplina al escribir cada subclase. |
+| Headers adicionales = mismo `payload` que se envía en el body | El enunciado pide reflejar "los datos devueltos por el ParserModel" como headers, con los mismos nombres. Como `validate_and_normalize` siempre preserva los nombres de campo de `parse_data()` sin transformarlos, `payload` ya **es** esos datos — reutilizarlo evita una segunda copia del mismo estado. |
 | Sin librerías externas de producción | El alcance no lo requiere (todo simulado); menos dependencias, menos superficie de fallo. |
 | `conversation_id` obligatorio (valida que no esté vacío) en `BaseAgent` | Hace explícita una regla que ya era implícita ("una instancia = una conversación"), habilita correlacionar logs por conversación, y deja lista la mitad de la clave que necesitaría un backend de idempotencia compartido en producción. |
 
@@ -139,9 +139,10 @@ Otros supuestos:
 ## Idempotencia y `conversation_id`
 
 Cada `AgentAction` expone una `key` estable y única. `BaseAgent` guarda un
-`set[str]` de claves ya ejecutadas con éxito; antes de evaluar
-`is_triggered`, si la clave ya está en el set, la acción se ignora. Esto
-garantiza que ninguna integración se dispare dos veces durante la misma
+`set[str]` de claves ya ejecutadas con éxito; antes de llamar a
+`validate_and_normalize`, si la clave ya está en el set, la acción se
+ignora. Esto garantiza que ninguna integración se dispare dos veces durante
+la misma
 conversación, incluso si el usuario repite la misma información en varios
 turnos (cubierto en `tests/test_debt_agent.py` y
 `tests/test_assistance_agent.py`).
@@ -268,11 +269,11 @@ class SendReminderSmsAction(AgentAction):
     key = "debt.send_reminder_sms"
     endpoint = "https://api.ringr.debt/v1/reminder-sms"
 
-    def is_triggered(self, parsed_data: dict) -> bool:
-        return parsed_data.get("phone_number") is not None
-
-    def build_payload(self, parsed_data: dict) -> dict:
-        return {"phone_number": parsed_data["phone_number"]}
+    def validate_and_normalize(self, parsed_data: dict) -> dict | None:
+        phone_number = parsed_data.get("phone_number")
+        if phone_number is None:
+            return None
+        return {"phone_number": phone_number}
 ```
 
 Y añadirla a la lista de acciones del agente correspondiente — `BaseAgent`

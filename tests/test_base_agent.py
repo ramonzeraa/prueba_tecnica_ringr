@@ -21,10 +21,7 @@ class AlwaysOnAction(AgentAction):
     key = "test.always_on"
     endpoint = "https://api.example.test/always-on"
 
-    def is_triggered(self, parsed_data: dict[str, Any]) -> bool:
-        return True
-
-    def build_payload(self, parsed_data: dict[str, Any]) -> dict[str, Any]:
+    def validate_and_normalize(self, parsed_data: dict[str, Any]) -> dict[str, Any] | None:
         return {"echo": parsed_data.get("value")}
 
 
@@ -32,11 +29,8 @@ class NeverOnAction(AgentAction):
     key = "test.never_on"
     endpoint = "https://api.example.test/never-on"
 
-    def is_triggered(self, parsed_data: dict[str, Any]) -> bool:
-        return False
-
-    def build_payload(self, parsed_data: dict[str, Any]) -> dict[str, Any]:
-        raise AssertionError("build_payload must not be called when is_triggered is False")
+    def validate_and_normalize(self, parsed_data: dict[str, Any]) -> dict[str, Any] | None:
+        return None
 
 
 CONVERSATION_ID = "conv-base-agent-test"

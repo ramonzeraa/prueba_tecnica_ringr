@@ -22,12 +22,12 @@ class RegisterAssistanceRequestAction(AgentAction):
     key = "assistance.register_request"
     endpoint = "https://api.ringr.assistance/v1/request"
 
-    def is_triggered(self, parsed_data: dict[str, Any]) -> bool:
+    def validate_and_normalize(self, parsed_data: dict[str, Any]) -> dict[str, Any] | None:
         request = parsed_data.get("request")
-        return isinstance(request, str) and request.strip() != ""
+        if not isinstance(request, str) or request.strip() == "":
+            return None
 
-    def build_payload(self, parsed_data: dict[str, Any]) -> dict[str, Any]:
-        return {"request": parsed_data["request"].strip()}
+        return {"request": request.strip()}
 
 
 class AssistanceAgent(BaseAgent):
