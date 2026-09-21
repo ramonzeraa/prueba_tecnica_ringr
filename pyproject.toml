@@ -1,0 +1,9 @@
+[project]
+name = "ringr-agents"
+version = "0.1.0"
+description = "Prueba tecnica Delivery Engineer - Ringr: agentes conversacionales de negocio"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
