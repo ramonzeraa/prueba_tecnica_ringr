@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import pytest
 from fakes import FakeConversationModel, FakeParserModel, SpyIntegrationClient
 
 from ringr_agents.actions import AgentAction
@@ -38,10 +39,25 @@ class NeverOnAction(AgentAction):
         raise AssertionError("build_payload must not be called when is_triggered is False")
 
 
+CONVERSATION_ID = "conv-base-agent-test"
+
+
+def test_rejects_an_empty_conversation_id():
+    with pytest.raises(ValueError):
+        BaseAgent(
+            conversation_id="",
+            conversation_model=FakeConversationModel(),
+            parser_model=FakeParserModel({}),
+            integration_client=SpyIntegrationClient(),
+            actions=[],
+        )
+
+
 def test_only_triggered_actions_fire_when_an_agent_has_several():
     parser = FakeParserModel({"value": 1})
     integration = SpyIntegrationClient()
     agent = BaseAgent(
+        conversation_id=CONVERSATION_ID,
         conversation_model=FakeConversationModel(),
         parser_model=parser,
         integration_client=integration,
@@ -57,6 +73,7 @@ def test_a_failed_integration_call_is_retried_on_a_later_turn():
     parser = FakeParserModel({"value": 1})
     failing_integration = SpyIntegrationClient(response=IntegrationResponse(status_code=500))
     agent = BaseAgent(
+        conversation_id=CONVERSATION_ID,
         conversation_model=FakeConversationModel(),
         parser_model=parser,
         integration_client=failing_integration,
@@ -75,6 +92,7 @@ def test_a_successful_call_is_never_retried():
     parser = FakeParserModel({"value": 1})
     integration = SpyIntegrationClient()
     agent = BaseAgent(
+        conversation_id=CONVERSATION_ID,
         conversation_model=FakeConversationModel(),
         parser_model=parser,
         integration_client=integration,
@@ -92,6 +110,7 @@ def test_logs_info_when_an_action_is_executed_successfully(caplog):
     caplog.set_level(logging.INFO, logger="ringr_agents.agent")
     parser = FakeParserModel({"value": 1})
     agent = BaseAgent(
+        conversation_id=CONVERSATION_ID,
         conversation_model=FakeConversationModel(),
         parser_model=parser,
         integration_client=SpyIntegrationClient(),
@@ -103,12 +122,14 @@ def test_logs_info_when_an_action_is_executed_successfully(caplog):
     assert any(
         record.levelno == logging.INFO and "test.always_on" in record.message for record in caplog.records
     )
+    assert any(CONVERSATION_ID in record.message for record in caplog.records)
 
 
 def test_logs_warning_when_the_integration_call_fails(caplog):
     caplog.set_level(logging.WARNING, logger="ringr_agents.agent")
     parser = FakeParserModel({"value": 1})
     agent = BaseAgent(
+        conversation_id=CONVERSATION_ID,
         conversation_model=FakeConversationModel(),
         parser_model=parser,
         integration_client=SpyIntegrationClient(response=IntegrationResponse(status_code=500)),
@@ -126,6 +147,7 @@ def test_logs_debug_when_an_already_executed_action_is_skipped(caplog):
     caplog.set_level(logging.DEBUG, logger="ringr_agents.agent")
     parser = FakeParserModel({"value": 1})
     agent = BaseAgent(
+        conversation_id=CONVERSATION_ID,
         conversation_model=FakeConversationModel(),
         parser_model=parser,
         integration_client=SpyIntegrationClient(),

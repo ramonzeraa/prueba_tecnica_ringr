@@ -36,11 +36,13 @@ class AssistanceAgent(BaseAgent):
 
     def __init__(
         self,
+        conversation_id: str,
         conversation_model: ConversationModel,
         parser_model: ParserModel,
         integration_client: IntegrationClient,
     ) -> None:
         super().__init__(
+            conversation_id=conversation_id,
             conversation_model=conversation_model,
             parser_model=parser_model,
             integration_client=integration_client,

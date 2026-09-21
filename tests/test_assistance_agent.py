@@ -5,6 +5,7 @@ from ringr_agents.agents.assistance_agent import AssistanceAgent
 
 def make_agent(parser: FakeParserModel, integration: SpyIntegrationClient) -> AssistanceAgent:
     return AssistanceAgent(
+        conversation_id="conv-assistance-test",
         conversation_model=FakeConversationModel(reply="claro, lo registro"),
         parser_model=parser,
         integration_client=integration,

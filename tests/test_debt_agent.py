@@ -5,6 +5,7 @@ from ringr_agents.agents.debt_agent import DebtAgent
 
 def make_agent(parser: FakeParserModel, integration: SpyIntegrationClient) -> DebtAgent:
     return DebtAgent(
+        conversation_id="conv-debt-test",
         conversation_model=FakeConversationModel(reply="entendido"),
         parser_model=parser,
         integration_client=integration,

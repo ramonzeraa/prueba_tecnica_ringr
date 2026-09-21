@@ -19,7 +19,7 @@ Se implementan los dos agentes pedidos por el enunciado:
 - [Flujo de un turno (`handle_turn`)](#flujo-de-un-turno-handle_turn)
 - [Decisiones de diseño y justificación](#decisiones-de-diseño-y-justificación)
 - [Supuestos asumidos](#supuestos-asumidos)
-- [Idempotencia](#idempotencia)
+- [Idempotencia y `conversation_id`](#idempotencia-y-conversation_id)
 - [Logging](#logging)
 - [Seguridad de los datos](#seguridad-de-los-datos)
 - [Escalabilidad](#escalabilidad)
@@ -105,6 +105,7 @@ desarrollo/test.
 | Validación y normalización de tipos y formato antes de disparar (fecha ISO, `float` excluyendo `bool`, strings no vacíos tras `strip()`) | El enunciado pide explícitamente "validar y normalizar la información parseada". `ParserModel` es una caja negra para el agente: no se asume que los datos siempre llegan bien formados. |
 | Headers adicionales = mismo `payload` que se envía en el body | El enunciado pide reflejar "los datos devueltos por el ParserModel" como headers, con los mismos nombres. Como `build_payload` siempre preserva los nombres de campo de `parse_data()` sin transformarlos, `payload` ya **es** esos datos — reutilizarlo evita una segunda copia del mismo estado. |
 | Sin librerías externas de producción | El alcance no lo requiere (todo simulado); menos dependencias, menos superficie de fallo. |
+| `conversation_id` obligatorio (valida que no esté vacío) en `BaseAgent` | Hace explícita una regla que ya era implícita ("una instancia = una conversación"), habilita correlacionar logs por conversación, y deja lista la mitad de la clave que necesitaría un backend de idempotencia compartido en producción. |
 
 ## Supuestos asumidos
 
@@ -135,7 +136,7 @@ Otros supuestos:
 - Una respuesta simulada exitosa siempre es `200 OK` (explícitamente
   permitido por el enunciado).
 
-## Idempotencia
+## Idempotencia y `conversation_id`
 
 Cada `AgentAction` expone una `key` estable y única. `BaseAgent` guarda un
 `set[str]` de claves ya ejecutadas con éxito; antes de evaluar
@@ -145,6 +146,15 @@ conversación, incluso si el usuario repite la misma información en varios
 turnos (cubierto en `tests/test_debt_agent.py` y
 `tests/test_assistance_agent.py`).
 
+Cada instancia de `BaseAgent` representa exactamente una conversación — es
+una regla implícita del diseño desde el principio, pero antes no existía
+nada en el código que la hiciera explícita. `conversation_id` (obligatorio
+en el constructor, valida que no esté vacío) le pone nombre a esa identidad:
+hoy se usa para poder correlacionar las líneas de log de una conversación
+puntual, y es, junto con `action.key`, la clave que un backend de
+idempotencia compartido usaría en producción (ver
+[Escalabilidad](#escalabilidad)).
+
 ## Logging
 
 `BaseAgent.handle_turn` emite logs (vía `logging.getLogger(__name__)`, sin
@@ -152,14 +162,17 @@ handlers ni configuración propia — el proyecto que lo use decide dónde
 mandarlos) en cuatro puntos: acción no disparada por condiciones no
 cumplidas (`DEBUG`), acción ya ejecutada en esta conversación y por tanto
 omitida (`DEBUG`), acción ejecutada con éxito (`INFO`), y fallo de la
-llamada de integración (`WARNING`). Nunca se loguea el payload en sí — solo
-la clave de la acción, el endpoint y (en fallos) el status code — por el
-mismo motivo detallado en la sección de seguridad: los datos parseados
-pueden ser sensibles.
+llamada de integración (`WARNING`). Cada línea arranca con
+`[conversation_id]` (ver [Idempotencia y `conversation_id`](#idempotencia-y-conversation_id))
+para poder filtrar los logs de una conversación puntual cuando hay muchas
+corriendo en paralelo. Nunca se loguea el payload en sí — solo el
+`conversation_id`, la clave de la acción, el endpoint y (en fallos) el
+status code — por el mismo motivo detallado en la sección de seguridad: los
+datos parseados pueden ser sensibles.
 
-Tres tests (`tests/test_base_agent.py`) verifican, con el fixture `caplog`
-de pytest, que los logs de éxito, fallo y omisión por idempotencia
-realmente se emiten con el nivel esperado.
+Tests (`tests/test_base_agent.py`) verifican, con el fixture `caplog` de
+pytest, que los logs de éxito, fallo y omisión por idempotencia realmente
+se emiten con el nivel esperado, y que incluyen el `conversation_id`.
 
 Salida real (no editada) al correr tres escenarios representativos con el
 logging habilitado:
@@ -172,22 +185,22 @@ $ pytest -s --log-cli-level=DEBUG -v \
 
 tests/test_debt_agent.py::test_fires_commitment_when_both_fields_present
 -------------------------------- live log call --------------------------------
-INFO     ringr_agents.agent:agent.py:64 Action 'debt.register_commitment' executed successfully (endpoint=https://api.ringr.debt/v1/commitment).
+INFO     ringr_agents.agent:agent.py:88 [conv-debt-test] Action 'debt.register_commitment' executed successfully (endpoint=https://api.ringr.debt/v1/commitment).
 PASSED
 
 tests/test_base_agent.py::test_a_failed_integration_call_is_retried_on_a_later_turn
 -------------------------------- live log call --------------------------------
-WARNING  ringr_agents.agent:agent.py:66 Action 'test.always_on' integration call failed (status=500, endpoint=https://api.example.test/always-on); will retry next turn.
-WARNING  ringr_agents.agent:agent.py:66 Action 'test.always_on' integration call failed (status=500, endpoint=https://api.example.test/always-on); will retry next turn.
+WARNING  ringr_agents.agent:agent.py:95 [conv-base-agent-test] Action 'test.always_on' integration call failed (status=500, endpoint=https://api.example.test/always-on); will retry next turn.
+WARNING  ringr_agents.agent:agent.py:95 [conv-base-agent-test] Action 'test.always_on' integration call failed (status=500, endpoint=https://api.example.test/always-on); will retry next turn.
 PASSED
 
 tests/test_base_agent.py::test_logs_debug_when_an_already_executed_action_is_skipped
 -------------------------------- live log call --------------------------------
-INFO     ringr_agents.agent:agent.py:64 Action 'test.always_on' executed successfully (endpoint=https://api.example.test/always-on).
-DEBUG    ringr_agents.agent:agent.py:49 Action 'test.always_on' already executed for this conversation, skipping.
+INFO     ringr_agents.agent:agent.py:88 [conv-base-agent-test] Action 'test.always_on' executed successfully (endpoint=https://api.example.test/always-on).
+DEBUG    ringr_agents.agent:agent.py:65 [conv-base-agent-test] Action 'test.always_on' already executed for this conversation, skipping.
 PASSED
 
-3 passed in 0.06s
+3 passed in 0.09s
 ```
 
 ## Seguridad de los datos
@@ -235,11 +248,12 @@ PASSED
   alcance de esta prueba (una conversación = una instancia de proceso), pero
   **no sobrevive a un reinicio del proceso ni funciona si distintos turnos
   de la misma conversación son atendidos por instancias distintas** en un
-  despliegue horizontalmente escalado. En producción, esa idempotencia
-  debería respaldarse en un almacén compartido (Redis, base de datos) con
-  clave `conversation_id + action.key`, sin cambiar la interfaz de
-  `AgentAction` ni de `BaseAgent` — solo la implementación del tracking de
-  ejecutadas.
+  despliegue horizontalmente escalado. `conversation_id` ya existe como
+  identidad explícita de la conversación en `BaseAgent` — en producción,
+  esa idempotencia debería respaldarse en un almacén compartido (Redis,
+  base de datos) con clave `conversation_id + action.key`, sin cambiar la
+  interfaz de `AgentAction` ni de `BaseAgent` — solo la implementación
+  interna del tracking de ejecutadas (hoy `self._executed_action_keys`).
 - **`IntegrationClient` desacoplado del transporte real**: pasar de
   simulado a HTTP real (con timeouts, reintentos con backoff, circuit
   breaker) es un cambio contenido a una sola clase, sin tocar agentes ni
@@ -268,9 +282,9 @@ no cambia.
 
 ```python
 class LeadQualificationAgent(BaseAgent):
-    def __init__(self, conversation_model, parser_model, integration_client):
+    def __init__(self, conversation_id, conversation_model, parser_model, integration_client):
         super().__init__(
-            conversation_model, parser_model, integration_client,
+            conversation_id, conversation_model, parser_model, integration_client,
             actions=[RegisterQualifiedLeadAction()],
         )
 ```
@@ -308,7 +322,7 @@ prueba_tecnica_ringr/
 
 ## Tests
 
-23 tests, sin dependencias externas de red ni de mocking de librerías (los
+24 tests, sin dependencias externas de red ni de mocking de librerías (los
 dobles de prueba en `tests/fakes.py` están escritos a mano).
 
 ```bash
