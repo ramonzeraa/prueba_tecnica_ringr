@@ -107,23 +107,15 @@ desarrollo/test.
 
 ## Supuestos asumidos
 
-El enunciado se recibió inicialmente como dos capturas de pantalla, con un
-fragmento de la sección de autenticación cortado por el OCR. Se confirmó
-contra el PDF original de la prueba, que dice textualmente:
-
-> "Las integraciones HTTP no deben ejecutarse realmente, pero sí deben
-> construir correctamente la request (URL, headers y body). Todas las
-> llamadas deben incluir autenticación mediante el Bearer Token
-> `ringr_test_token_9f3a2c1d` y considerar como headers adicionales los
-> datos devueltos por el ParserModel con los mismos nombres."
-
-Implementación resultante (`src/ringr_agents/auth.py` y
+El requisito de autenticación del enunciado pide incluir el Bearer Token
+`ringr_test_token_9f3a2c1d` en cada llamada, y considerar como headers
+adicionales los datos devueltos por `ParserModel`, con los mismos nombres.
+Interpretación aplicada (`src/ringr_agents/auth.py` y
 `src/ringr_agents/integration.py`):
 
 1. El token viaja únicamente en el header `Authorization: Bearer
-   ringr_test_token_9f3a2c1d` (no se duplica en el body — esa era una
-   lectura errónea de una versión anterior de este README, basada en el
-   texto truncado por el OCR).
+   ringr_test_token_9f3a2c1d`; no hay ningún requisito de duplicarlo en el
+   body.
 2. Los headers adicionales son, literalmente, los campos que `payload`
    trae — que a su vez son los mismos que devuelve `ParserModel.parse_data()`
    bajo idéntico nombre (`commitment_date`, `committed_amount`, `request`,
