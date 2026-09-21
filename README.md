@@ -1,5 +1,7 @@
 # Ringr — Agentes conversacionales (prueba técnica Delivery Engineer)
 
+[![Tests](https://github.com/ramonzeraa/prueba_tecnica_ringr/actions/workflows/tests.yml/badge.svg)](https://github.com/ramonzeraa/prueba_tecnica_ringr/actions/workflows/tests.yml)
+
 Implementación de una arquitectura de agentes conversacionales orientada a
 objetos: cada agente gestiona un turno de conversación de forma
 estructurada, extrae información relevante, decide según reglas de negocio
@@ -26,6 +28,7 @@ Se implementan los dos agentes pedidos por el enunciado:
 - [Cómo extender el proyecto](#cómo-extender-el-proyecto)
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Tests](#tests)
+- [CI](#ci)
 
 ## Cómo ejecutar el proyecto
 
@@ -303,6 +306,9 @@ prueba_tecnica_ringr/
 ├── README.md
 ├── pyproject.toml
 ├── requirements-dev.txt
+├── .github/
+│   └── workflows/
+│       └── tests.yml          # CI: pytest en cada push/PR a main
 ├── src/
 │   └── ringr_agents/
 │       ├── models.py              # ConversationModel, ParserModel (contratos)
@@ -329,3 +335,21 @@ dobles de prueba en `tests/fakes.py` están escritos a mano).
 ```bash
 pytest -v
 ```
+
+## CI
+
+`.github/workflows/tests.yml` corre la suite completa en GitHub Actions en
+cada `push` y `pull_request` a `main`, en Python 3.10 y 3.12 (las dos
+versiones acotan el `requires-python = ">=3.10"` del `pyproject.toml`, en
+vez de dejarlo como una afirmación sin comprobar). El badge al inicio de
+este README refleja el estado real del último run.
+
+**Por qué el pipeline solo corre tests y no incluye build ni deploy:** este
+es un proyecto de demostración — no existe ningún artefacto que publicar ni
+ningún entorno real al que desplegar (todas las integraciones son
+simuladas, no hay servicio corriendo en ningún sitio). En un proyecto real,
+un pipeline de CI/CD con estas características añadiría, como mínimo,
+build de artefacto, análisis estático (lint/type-check), y una o más etapas
+de deploy con sus propios gates (staging, aprobación manual, producción)
+— eso no es una omisión de este README, es simplemente fuera del alcance
+de lo que hay que demostrar aquí.
