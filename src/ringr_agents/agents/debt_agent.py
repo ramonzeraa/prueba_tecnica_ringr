@@ -6,7 +6,7 @@ case):
     committed_amount:  None | float
 
 When both are present (not None) and valid, a commitment is registered via
-POST https://api.debt.v1/commitment.
+POST https://api.ringr.debt/v1/commitment.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from ..models import ConversationModel, ParserModel
 
 class RegisterDebtCommitmentAction(AgentAction):
     key = "debt.register_commitment"
-    endpoint = "https://api.debt.v1/commitment"
+    endpoint = "https://api.ringr.debt/v1/commitment"
 
     def is_triggered(self, parsed_data: dict[str, Any]) -> bool:
         return self._is_valid_date(parsed_data.get("commitment_date")) and self._is_valid_amount(

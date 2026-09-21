@@ -101,29 +101,34 @@ desarrollo/test.
 | Reglas de negocio en objetos `AgentAction`, no en `if/elif` dentro del agente | Cumple explícitamente el requisito de extensibilidad ("incorporar fácilmente nuevos agentes, nuevos tipos de acciones") sin violar Open/Closed. |
 | `IntegrationClient` como interfaz + `SimulatedIntegrationClient` | Permite construir el request (headers/body) igual que un cliente real, sin tocar la red, y sin que el agente sepa la diferencia. Sustituir por un cliente real (`requests`) es un cambio de una sola clase. |
 | Idempotencia con `set[str]` de claves de acción, por instancia de agente | Una instancia de agente representa una conversación. Solo se marca una acción como ejecutada tras una respuesta exitosa (`response.ok`), así una falla transitoria puede reintentarse en el siguiente turno sin perder la acción de negocio. |
-| Validación de tipos y formato antes de disparar (fecha ISO, `float` excluyendo `bool`, strings no vacíos tras `strip()`) | El enunciado pide explícitamente "validar y decidir". `ParserModel` es una caja negra para el agente: no se asume que los datos siempre llegan bien formados. |
+| Validación y normalización de tipos y formato antes de disparar (fecha ISO, `float` excluyendo `bool`, strings no vacíos tras `strip()`) | El enunciado pide explícitamente "validar y normalizar la información parseada". `ParserModel` es una caja negra para el agente: no se asume que los datos siempre llegan bien formados. |
+| Headers adicionales = mismo `payload` que se envía en el body | El enunciado pide reflejar "los datos devueltos por el ParserModel" como headers, con los mismos nombres. Como `build_payload` siempre preserva los nombres de campo de `parse_data()` sin transformarlos, `payload` ya **es** esos datos — reutilizarlo evita una segunda copia del mismo estado. |
 | Sin librerías externas de producción | El alcance no lo requiere (todo simulado); menos dependencias, menos superficie de fallo. |
 
 ## Supuestos asumidos
 
-El enunciado se recibió como dos capturas de pantalla; un fragmento sobre la
-autenticación quedó parcialmente cortado/impreciso en el texto:
+El enunciado se recibió inicialmente como dos capturas de pantalla, con un
+fragmento de la sección de autenticación cortado por el OCR. Se confirmó
+contra el PDF original de la prueba, que dice textualmente:
 
-> "...autenticación mediante el Bearer Token (header, body) y considerar
-> como headers adicionales los datos devueltos por
-> ringr_test_token_9f3a2c1d"
+> "Las integraciones HTTP no deben ejecutarse realmente, pero sí deben
+> construir correctamente la request (URL, headers y body). Todas las
+> llamadas deben incluir autenticación mediante el Bearer Token
+> `ringr_test_token_9f3a2c1d` y considerar como headers adicionales los
+> datos devueltos por el ParserModel con los mismos nombres."
 
-Interpretación adoptada (`src/ringr_agents/auth.py`):
+Implementación resultante (`src/ringr_agents/auth.py` y
+`src/ringr_agents/integration.py`):
 
-1. El token `ringr_test_token_9f3a2c1d` viaja en el header
-   `Authorization: Bearer <token>` **y** duplicado en el cuerpo de la
-   petición (`{"auth_token": "<token>"}`), ya que el enunciado dice
-   explícitamente "(header, body)".
-2. "Los datos devueltos por" se interpreta como los metadatos que un
-   servicio de autenticación real devolvería al validar el token (p. ej.
-   client id, scope). Como no existe tal servicio en el alcance de la
-   prueba, se simula con una función pura (`resolve_token_metadata`) que
-   devuelve headers adicionales fijos.
+1. El token viaja únicamente en el header `Authorization: Bearer
+   ringr_test_token_9f3a2c1d` (no se duplica en el body — esa era una
+   lectura errónea de una versión anterior de este README, basada en el
+   texto truncado por el OCR).
+2. Los headers adicionales son, literalmente, los campos que `payload`
+   trae — que a su vez son los mismos que devuelve `ParserModel.parse_data()`
+   bajo idéntico nombre (`commitment_date`, `committed_amount`, `request`,
+   según el agente), convertidos a `str` porque los headers HTTP no aceptan
+   otro tipo.
 
 Otros supuestos:
 
@@ -205,7 +210,7 @@ turnos (cubierto en `tests/test_debt_agent.py` y
 ```python
 class SendReminderSmsAction(AgentAction):
     key = "debt.send_reminder_sms"
-    endpoint = "https://api.debt.v1/reminder-sms"
+    endpoint = "https://api.ringr.debt/v1/reminder-sms"
 
     def is_triggered(self, parsed_data: dict) -> bool:
         return parsed_data.get("phone_number") is not None
@@ -246,7 +251,7 @@ prueba_tecnica_ringr/
 │       ├── models.py              # ConversationModel, ParserModel (contratos)
 │       ├── actions.py             # AgentAction (Strategy) + OutboundAction
 │       ├── integration.py         # IntegrationClient + SimulatedIntegrationClient
-│       ├── auth.py                # Bearer token + metadata simulada
+│       ├── auth.py                # Constante del Bearer token de prueba
 │       ├── agent.py               # BaseAgent (template method + idempotencia)
 │       └── agents/
 │           ├── debt_agent.py          # DebtAgent
@@ -261,7 +266,7 @@ prueba_tecnica_ringr/
 
 ## Tests
 
-19 tests, sin dependencias externas de red ni de mocking de librerías (los
+20 tests, sin dependencias externas de red ni de mocking de librerías (los
 dobles de prueba en `tests/fakes.py` están escritos a mano).
 
 ```bash

@@ -21,7 +21,7 @@ def test_fires_commitment_when_both_fields_present():
     assert reply == "entendido"
     assert len(integration.calls) == 1
     endpoint, payload = integration.calls[0]
-    assert endpoint == "https://api.debt.v1/commitment"
+    assert endpoint == "https://api.ringr.debt/v1/commitment"
     assert payload == {"commitment_date": "2026-01-15", "committed_amount": 150.0}
 
 

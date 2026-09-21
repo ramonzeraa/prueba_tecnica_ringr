@@ -14,3 +14,6 @@ build/
 
 # Notas de estudio personales (Ramon) - nunca se commitean.
 study_notes/
+
+# Enunciado original de la prueba - material de Ringr, no se publica.
+*.pdf

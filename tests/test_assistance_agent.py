@@ -21,7 +21,7 @@ def test_fires_request_when_present():
     assert reply == "claro, lo registro"
     assert len(integration.calls) == 1
     endpoint, payload = integration.calls[0]
-    assert endpoint == "https://api.ringr.assistance.v1/request"
+    assert endpoint == "https://api.ringr.assistance/v1/request"
     assert payload == {"request": "Necesito hablar con un agente humano"}
 
 

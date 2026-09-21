@@ -5,7 +5,7 @@ case):
     request: None | str
 
 When present and non-empty, the request is registered via
-POST https://api.ringr.assistance.v1/request.
+POST https://api.ringr.assistance/v1/request.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from ..models import ConversationModel, ParserModel
 
 class RegisterAssistanceRequestAction(AgentAction):
     key = "assistance.register_request"
-    endpoint = "https://api.ringr.assistance.v1/request"
+    endpoint = "https://api.ringr.assistance/v1/request"
 
     def is_triggered(self, parsed_data: dict[str, Any]) -> bool:
         request = parsed_data.get("request")
