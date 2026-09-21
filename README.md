@@ -20,6 +20,7 @@ Se implementan los dos agentes pedidos por el enunciado:
 - [Decisiones de diseño y justificación](#decisiones-de-diseño-y-justificación)
 - [Supuestos asumidos](#supuestos-asumidos)
 - [Idempotencia](#idempotencia)
+- [Logging](#logging)
 - [Seguridad de los datos](#seguridad-de-los-datos)
 - [Escalabilidad](#escalabilidad)
 - [Cómo extender el proyecto](#cómo-extender-el-proyecto)
@@ -144,6 +145,51 @@ conversación, incluso si el usuario repite la misma información en varios
 turnos (cubierto en `tests/test_debt_agent.py` y
 `tests/test_assistance_agent.py`).
 
+## Logging
+
+`BaseAgent.handle_turn` emite logs (vía `logging.getLogger(__name__)`, sin
+handlers ni configuración propia — el proyecto que lo use decide dónde
+mandarlos) en cuatro puntos: acción no disparada por condiciones no
+cumplidas (`DEBUG`), acción ya ejecutada en esta conversación y por tanto
+omitida (`DEBUG`), acción ejecutada con éxito (`INFO`), y fallo de la
+llamada de integración (`WARNING`). Nunca se loguea el payload en sí — solo
+la clave de la acción, el endpoint y (en fallos) el status code — por el
+mismo motivo detallado en la sección de seguridad: los datos parseados
+pueden ser sensibles.
+
+Tres tests (`tests/test_base_agent.py`) verifican, con el fixture `caplog`
+de pytest, que los logs de éxito, fallo y omisión por idempotencia
+realmente se emiten con el nivel esperado.
+
+Salida real (no editada) al correr tres escenarios representativos con el
+logging habilitado:
+
+```
+$ pytest -s --log-cli-level=DEBUG -v \
+    tests/test_debt_agent.py::test_fires_commitment_when_both_fields_present \
+    tests/test_base_agent.py::test_a_failed_integration_call_is_retried_on_a_later_turn \
+    tests/test_base_agent.py::test_logs_debug_when_an_already_executed_action_is_skipped
+
+tests/test_debt_agent.py::test_fires_commitment_when_both_fields_present
+-------------------------------- live log call --------------------------------
+INFO     ringr_agents.agent:agent.py:64 Action 'debt.register_commitment' executed successfully (endpoint=https://api.ringr.debt/v1/commitment).
+PASSED
+
+tests/test_base_agent.py::test_a_failed_integration_call_is_retried_on_a_later_turn
+-------------------------------- live log call --------------------------------
+WARNING  ringr_agents.agent:agent.py:66 Action 'test.always_on' integration call failed (status=500, endpoint=https://api.example.test/always-on); will retry next turn.
+WARNING  ringr_agents.agent:agent.py:66 Action 'test.always_on' integration call failed (status=500, endpoint=https://api.example.test/always-on); will retry next turn.
+PASSED
+
+tests/test_base_agent.py::test_logs_debug_when_an_already_executed_action_is_skipped
+-------------------------------- live log call --------------------------------
+INFO     ringr_agents.agent:agent.py:64 Action 'test.always_on' executed successfully (endpoint=https://api.example.test/always-on).
+DEBUG    ringr_agents.agent:agent.py:49 Action 'test.always_on' already executed for this conversation, skipping.
+PASSED
+
+3 passed in 0.06s
+```
+
 ## Seguridad de los datos
 
 - **Ninguna llamada de red real se ejecuta jamás** — es una decisión de
@@ -169,6 +215,10 @@ turnos (cubierto en `tests/test_debt_agent.py` y
   contenido de solicitudes de soporte) solo se procesan en memoria dentro
   del ciclo de vida del turno; no se persisten en ningún punto de este
   proyecto.
+- **Los logs de `BaseAgent` (ver [Logging](#logging)) nunca incluyen el
+  payload**, precisamente para no aplicar en la práctica lo contrario de
+  este mismo punto: se loguea la clave de la acción y el endpoint, nunca el
+  importe ni el contenido de la solicitud.
 
 ## Escalabilidad
 
@@ -258,7 +308,7 @@ prueba_tecnica_ringr/
 
 ## Tests
 
-20 tests, sin dependencias externas de red ni de mocking de librerías (los
+23 tests, sin dependencias externas de red ni de mocking de librerías (los
 dobles de prueba en `tests/fakes.py` están escritos a mano).
 
 ```bash

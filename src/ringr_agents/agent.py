@@ -8,9 +8,13 @@ order and are always the same shape - only the injected collaborators
 
 from __future__ import annotations
 
+import logging
+
 from .actions import AgentAction
 from .integration import IntegrationClient
 from .models import ConversationModel, ParserModel
+
+logger = logging.getLogger(__name__)
 
 
 class BaseAgent:
@@ -42,14 +46,28 @@ class BaseAgent:
 
         for action in self._actions:
             if action.key in self._executed_action_keys:
+                logger.debug("Action '%s' already executed for this conversation, skipping.", action.key)
                 continue
 
             outbound = action.resolve(parsed_data)
             if outbound is None:
+                logger.debug("Action '%s' conditions not met this turn, skipping.", action.key)
                 continue
 
+            # Only the action key and endpoint are logged, never the payload
+            # itself: parsed conversation data (debt amounts, support
+            # requests, ...) may be sensitive and has no reason to end up in
+            # log storage.
             response = self._integration_client.post(outbound.endpoint, outbound.payload)
             if response.ok:
                 self._executed_action_keys.add(action.key)
+                logger.info("Action '%s' executed successfully (endpoint=%s).", action.key, outbound.endpoint)
+            else:
+                logger.warning(
+                    "Action '%s' integration call failed (status=%s, endpoint=%s); will retry next turn.",
+                    action.key,
+                    response.status_code,
+                    outbound.endpoint,
+                )
 
         return reply

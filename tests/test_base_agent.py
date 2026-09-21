@@ -6,6 +6,7 @@ BaseAgent with zero changes to it.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fakes import FakeConversationModel, FakeParserModel, SpyIntegrationClient
@@ -85,3 +86,56 @@ def test_a_successful_call_is_never_retried():
     agent.handle_turn("tercer turno")
 
     assert len(integration.calls) == 1
+
+
+def test_logs_info_when_an_action_is_executed_successfully(caplog):
+    caplog.set_level(logging.INFO, logger="ringr_agents.agent")
+    parser = FakeParserModel({"value": 1})
+    agent = BaseAgent(
+        conversation_model=FakeConversationModel(),
+        parser_model=parser,
+        integration_client=SpyIntegrationClient(),
+        actions=[AlwaysOnAction()],
+    )
+
+    agent.handle_turn("hola")
+
+    assert any(
+        record.levelno == logging.INFO and "test.always_on" in record.message for record in caplog.records
+    )
+
+
+def test_logs_warning_when_the_integration_call_fails(caplog):
+    caplog.set_level(logging.WARNING, logger="ringr_agents.agent")
+    parser = FakeParserModel({"value": 1})
+    agent = BaseAgent(
+        conversation_model=FakeConversationModel(),
+        parser_model=parser,
+        integration_client=SpyIntegrationClient(response=IntegrationResponse(status_code=500)),
+        actions=[AlwaysOnAction()],
+    )
+
+    agent.handle_turn("hola")
+
+    assert any(
+        record.levelno == logging.WARNING and "test.always_on" in record.message for record in caplog.records
+    )
+
+
+def test_logs_debug_when_an_already_executed_action_is_skipped(caplog):
+    caplog.set_level(logging.DEBUG, logger="ringr_agents.agent")
+    parser = FakeParserModel({"value": 1})
+    agent = BaseAgent(
+        conversation_model=FakeConversationModel(),
+        parser_model=parser,
+        integration_client=SpyIntegrationClient(),
+        actions=[AlwaysOnAction()],
+    )
+
+    agent.handle_turn("primer turno")
+    caplog.clear()
+    agent.handle_turn("segundo turno")
+
+    assert any(
+        record.levelno == logging.DEBUG and "already executed" in record.message for record in caplog.records
+    )
