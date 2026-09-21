@@ -11,3 +11,6 @@ dist/
 build/
 .vscode/
 .idea/
+
+# Notas de estudio personales (Ramon) - nunca se commitean.
+study_notes/
